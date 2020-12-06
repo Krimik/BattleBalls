@@ -10,7 +10,7 @@ default_game_canvas_height=800
 default_stats_canvas_height=200
 default_free_border=50  
 
-class Game:
+class Game: 
   def __init__(self, *args):    
 
     #Settings
