@@ -33,6 +33,7 @@ class Game:
     self.current_generation = 1    
     self.grid = 50
     self.debug = False
+    self.is_paused = False
 
     # Initial game setup
     self.window = tkinter.Tk()
@@ -55,8 +56,15 @@ class Game:
 
       if self.uniform == True:
 
-        for lx in range(self.free_border, self.game_canvas_width - self.free_border, int((self.game_canvas_width - self.free_border) / math.sqrt(self.population_size))):
-          for ly in range(self.free_border, self.game_canvas_height - self.free_border, int((self.game_canvas_height - self.free_border) / math.sqrt(self.population_size))):
+        start_x = self.free_border
+        end_x = self.game_canvas_width - self.free_border        
+        start_y = self.free_border
+        end_y = self.game_canvas_height - self.free_border     
+        space_for_one_x = int ((end_x - start_x) / math.sqrt(self.population_size))
+        space_for_one_y = int ((end_y - start_y) / math.sqrt(self.population_size))
+
+        for lx in range(start_x + space_for_one_x // 2, end_x, space_for_one_x):
+          for ly in range(start_y + space_for_one_y // 2, end_y, space_for_one_y):
             ucoord.append({"x": lx + random.randrange(-10, 10), "y": ly + random.randrange(-10, 10)})
 
       else:
@@ -81,20 +89,34 @@ class Game:
 
       pop = []
 
-      ball = NewEntity(350, 350, self)
-      ball.set_speed(1)
+      ball = NewEntity(400, 400, self)
+      ball.set_speed(0)
+      ball.set_ai(False)           
       ball.set_size(50)
-      ball.set_facing_degrees(30)
-      ball.set_sensitivity(3)
-    
+      ball.set_head_size(120)           
+      ball.set_facing_degrees(180)
+      ball.set_sensitivity(2)
+
       pop.append(ball)
 
-      # ball = NewEntity(450, 400, self)
-      # ball.set_speed(1.5)
-      # ball.set_size(30)
-      # ball.set_facing_degrees(350)
-      # ball.set_sensitivity(5)
+      ball = NewEntity(510, 600, self)
+      ball.set_speed(3)
+      ball.set_size(50)
+      ball.set_ai(False)            
+      ball.set_head_size(120)           
+      ball.set_facing_degrees(180)
+      ball.set_sensitivity(10)
 
+      pop.append(ball)
+
+      # ball = NewEntity(400, 650, self)
+      # ball.set_speed(1)
+      # ball.set_size(50)
+      # ball.set_ai(False)              
+      # ball.set_head_size(190)      
+      # ball.set_facing_degrees(15)
+      # ball.set_sensitivity(3)
+    
       # pop.append(ball)
 
       return pop
@@ -104,9 +126,12 @@ class Game:
       for ball in self.population:
         if ball.get_is_alive():  
 
-          # Calculate movement
-          ball.set_x(ball.get_x() + ball.get_speed() * math.sin(ball.get_facing()))
-          ball.set_y(ball.get_y() + ball.get_speed() * math.cos(ball.get_facing()))          
+          if self.is_paused == False:
+            # Calculate movement
+            ball.set_x(ball.get_x() + ball.get_speed() * math.sin(ball.get_facing()))
+            ball.set_y(ball.get_y() + ball.get_speed() * math.cos(ball.get_facing()))          
+
+          # don't allow moving into other balls
 
           # Update stars
           current_distance_from_origin = math.sqrt((ball.get_stat("original_x") - ball.get_x())**2 + (ball.get_stat("original_y") - ball.get_y())**2)
@@ -139,24 +164,28 @@ class Game:
 
               dx = abs(other_ball.get_x() - ball.get_x())
               dy = abs(other_ball.get_y() - ball.get_y())
-              dd = abs(math.sqrt( dx**2 + dy**2 ))
+              dd = (math.sqrt( dx**2 + dy**2 ))
 
-              if ball.get_y() < other_ball.get_y():        
-                if ball.get_x() < other_ball.get_x():                                 
-                  ball.set_sensor_input(math.acos(dy / dd))
-                else:
-                  ball.set_sensor_input(-math.acos(dy / dd))
-              else:           
-                if ball.get_x() < other_ball.get_x():                      
-                  ball.set_sensor_input(math.pi - math.acos(dy / dd))
-                else:
-                  ball.set_sensor_input(math.pi + math.acos(dy / dd))                  
+              if dd != 0:
+                if ball.get_y() < other_ball.get_y():        
+                  if ball.get_x() < other_ball.get_x():                                 
+                    ball.set_sensor_input(+math.acos(dy / dd))
+                  else:
+                    ball.set_sensor_input(-math.acos(dy / dd))
+                else:           
+                  if ball.get_x() < other_ball.get_x():                      
+                    ball.set_sensor_input(math.pi - math.acos(dy / dd))
+                  else:
+                    ball.set_sensor_input(math.pi + math.acos(dy / dd))                  
 
             if other_ball != ball and distance_between_balls <= ball.get_size() + other_ball.get_size():     
-              ball.kill()                         
+              if (ball.get_sensor_input_degrees() <= ball.get_facing_degrees() - ball.get_head_size()/2 or
+                  ball.get_sensor_input_degrees() >= ball.get_facing_degrees() + ball.get_head_size()/2):
+                    ball.kill()                         
 
-          # Fire Neurons to get new "facing" value
-          ball.set_facing(ball.fire_neurons(self))
+          if self.is_paused == False and ball.get_speed() != 0 and ball.get_ai() == True:
+            # Fire Neurons to get new "facing" value
+            ball.set_facing(ball.fire_neurons(self))
 
   def animate(self, active):
       if active:
@@ -195,7 +224,7 @@ class Game:
                                       ball.get_ry() + ball.get_sensor_size(),
                                       width = 1, dash=(3,5))
 
-          if ball.get_sensor_input() != 0:
+          if ball.get_is_alive() == True and ball.get_sensor_input() != 0:
 
             self.game_canvas.create_line(ball.get_rx(), 
                                         ball.get_ry(), 
@@ -251,10 +280,11 @@ class NewEntity:
       self.__y = 0
       self.__rx = 0
       self.__ry = 0   
-      self.__size = random.random() * 50
-      self.__head_size = 10 + random.random()*180      
+      self.__ai = True   
+      self.__size = random.random() * 40 + 10
+      self.__head_size = 90 + random.random()*90     
       self.__speed = random.random() * 5
-      self.__sensitivity = random.random() * 20
+      self.__sensitivity = 1 + random.random() * 20
       self.__color = "green"
       self.__facing = random.random() * math.tau
       self.__facing_degrees = math.degrees(self.__facing)
@@ -301,6 +331,11 @@ class NewEntity:
     def set_ry(self, ry):
       self.ry = ry
       self.y = default_game_canvas_height - ry
+
+    def get_ai(self):
+      return self.__ai
+    def set_ai(self, ai):
+      self.__ai = ai
 
     def get_size(self):
       return self.__size
@@ -364,7 +399,6 @@ class NewEntity:
     def get_sensor_size(self):
       return self.get_size() * self.get_sensitivity()
 
-
     def kill(self):
           self.set_is_alive(False)
           self.set_color("red")
@@ -386,7 +420,7 @@ class NewEntity:
         # Get input values and scale to 0-1
         input_data = np.array([scale_to_0_to_1(self.get_x(), 1, game.game_canvas_width),           
                               scale_to_0_to_1(self.get_y(), 1, game.game_canvas_height), 
-                              scale_to_0_to_1(self.get_sensor_input(), 0, math.pi*2)])
+                              self.get_sensor_input()])
 
         # Define weights of hidden layer
         hidden_weights = np.array([self.get_genome()[0:4], 
