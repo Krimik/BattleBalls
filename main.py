@@ -1,3 +1,5 @@
+# pylint: disable=unused-variable
+
 import tkinter
 import time
 import random
