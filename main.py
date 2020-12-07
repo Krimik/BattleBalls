@@ -22,7 +22,7 @@ class Game:
     self.free_border=default_free_border 
     self.animation = True
     self.animation_refresh_seconds = 1/60 #60fps
-    self.population_size = 4
+    self.population_size = 2
     self.uniform = True
     self.new_generation_age_seconds = 17
     self.new_generation_age_ticks = 1000
@@ -32,11 +32,13 @@ class Game:
     self.current_generation_age_seconds = 0
     self.current_generation = 1    
     self.grid = 50
-    self.debug = False
+    self.debug = True
     self.is_paused = False
+    self.test_population = False
 
     # Initial game setup
     self.window = tkinter.Tk()
+
     self.window.title("Battle Balls")
     self.window.geometry(f'{self.game_canvas_width}x{self.game_canvas_height+self.stats_canvas_height}')
 
@@ -50,6 +52,15 @@ class Game:
 
     self.population = self.populate()
 
+    # Pause game on space key
+    def space_pressed(event):
+        if event.keysym == "space" and self.is_paused == False:
+              self.is_paused = True
+        elif event.keysym == "space" and self.is_paused == True:
+              self.is_paused = False
+
+    self.window.bind("<Key>", space_pressed)
+
   def get_uniform_coordinates(self):
 
       ucoord = []
@@ -60,11 +71,11 @@ class Game:
         end_x = self.game_canvas_width - self.free_border        
         start_y = self.free_border
         end_y = self.game_canvas_height - self.free_border     
-        space_for_one_x = int ((end_x - start_x) / math.sqrt(self.population_size))
-        space_for_one_y = int ((end_y - start_y) / math.sqrt(self.population_size))
+        space_for_one_x = int ((end_x - start_x) / math.sqrt(math.ceil(math.sqrt(self.population_size))**2))
+        space_for_one_y = int ((end_y - start_y) / math.sqrt(math.ceil(math.sqrt(self.population_size))**2))
 
-        for lx in range(start_x + space_for_one_x // 2, end_x, space_for_one_x):
-          for ly in range(start_y + space_for_one_y // 2, end_y, space_for_one_y):
+        for lx in range(start_x + math.ceil(space_for_one_x / 2), end_x, space_for_one_x):
+          for ly in range(start_y + math.ceil(space_for_one_y / 2), end_y, space_for_one_y):
             ucoord.append({"x": lx + random.randrange(-10, 10), "y": ly + random.randrange(-10, 10)})
 
       else:
@@ -78,46 +89,44 @@ class Game:
 
       pop = []
 
-      uniform_coordinates = self.get_uniform_coordinates()
+      if self.test_population == False:
 
-      for i in range(0, self.population_size):
-        pop.append(NewEntity(uniform_coordinates[i]["x"], uniform_coordinates[i]["y"], self))
+        uniform_coordinates = self.get_uniform_coordinates()
+
+        for i in range(0, self.population_size):
+          pop.append(NewEntity(uniform_coordinates[i]["x"], uniform_coordinates[i]["y"], self))
       
-      return pop
+      else:
 
-  def tpopulate(self): #test population - manual
+        ball = NewEntity(400, 400, self)
+        ball.set_speed(1)
+        ball.set_ai(False)           
+        ball.set_size(60)
+        ball.set_head_size(120)           
+        ball.set_facing_degrees(180)
+        ball.set_sensitivity(1.2)
 
-      pop = []
+        pop.append(ball)
 
-      ball = NewEntity(400, 400, self)
-      ball.set_speed(0)
-      ball.set_ai(False)           
-      ball.set_size(50)
-      ball.set_head_size(120)           
-      ball.set_facing_degrees(180)
-      ball.set_sensitivity(2)
+        ball = NewEntity(650, 400, self)
+        ball.set_speed(0)
+        ball.set_ai(False)           
+        ball.set_size(50)
+        ball.set_head_size(120)           
+        ball.set_facing_degrees(180)
+        ball.set_sensitivity(1.5)
 
-      pop.append(ball)
+        pop.append(ball)
 
-      ball = NewEntity(510, 600, self)
-      ball.set_speed(3)
-      ball.set_size(50)
-      ball.set_ai(False)            
-      ball.set_head_size(120)           
-      ball.set_facing_degrees(180)
-      ball.set_sensitivity(10)
+        ball = NewEntity(520, 620, self)
+        ball.set_speed(2)
+        ball.set_size(30)
+        ball.set_ai(False)            
+        ball.set_head_size(120)           
+        ball.set_facing_degrees(200)
+        ball.set_sensitivity(3)
 
-      pop.append(ball)
-
-      # ball = NewEntity(400, 650, self)
-      # ball.set_speed(1)
-      # ball.set_size(50)
-      # ball.set_ai(False)              
-      # ball.set_head_size(190)      
-      # ball.set_facing_degrees(15)
-      # ball.set_sensitivity(3)
-    
-      # pop.append(ball)
+        pop.append(ball)
 
       return pop
 
@@ -125,15 +134,13 @@ class Game:
 
       for ball in self.population:
         if ball.get_is_alive():  
-
           if self.is_paused == False:
-            # Calculate movement
+
+          #   # Calculate movement
             ball.set_x(ball.get_x() + ball.get_speed() * math.sin(ball.get_facing()))
             ball.set_y(ball.get_y() + ball.get_speed() * math.cos(ball.get_facing()))          
 
-          # don't allow moving into other balls
-
-          # Update stars
+          # Update stats
           current_distance_from_origin = math.sqrt((ball.get_stat("original_x") - ball.get_x())**2 + (ball.get_stat("original_y") - ball.get_y())**2)
 
           if current_distance_from_origin > ball.get_stat("max_distance_from_origin"):
@@ -155,8 +162,8 @@ class Game:
           if ball.get_x() > self.game_canvas_width - ball.get_size() or ball.get_x() < ball.get_size() or ball.get_y() > self.game_canvas_height - ball.get_size() or ball.get_y() < ball.get_size():
             ball.kill()
 
-          # Detect other ball hits
-          for other_ball in self.population:
+          # Detect other ball hits (ignore dead balls)
+          for other_ball in [ball for ball in self.population if ball.get_is_alive() == True] :
             
             distance_between_balls = math.sqrt((ball.get_x() - other_ball.get_x())**2 + (ball.get_y() - other_ball.get_y())**2)
 
@@ -179,9 +186,10 @@ class Game:
                     ball.set_sensor_input(math.pi + math.acos(dy / dd))                  
 
             if other_ball != ball and distance_between_balls <= ball.get_size() + other_ball.get_size():     
-              if (ball.get_sensor_input_degrees() <= ball.get_facing_degrees() - ball.get_head_size()/2 or
-                  ball.get_sensor_input_degrees() >= ball.get_facing_degrees() + ball.get_head_size()/2):
-                    ball.kill()                         
+              if (other_ball.get_sensor_input_degrees() <= other_ball.get_facing_degrees() - other_ball.get_head_size()/2 or
+                  other_ball.get_sensor_input_degrees() >= other_ball.get_facing_degrees() + other_ball.get_head_size()/2):
+                    other_ball.kill()        
+                    ball.set_stat("kills", ball.get_stat("kills") + 1)
 
           if self.is_paused == False and ball.get_speed() != 0 and ball.get_ai() == True:
             # Fire Neurons to get new "facing" value
@@ -210,14 +218,6 @@ class Game:
                                       ball.get_ry() + ball.get_size(),
                                       fill=ball.get_color())
 
-          #debugging
-          if self.debug == True:
-            self.game_canvas.create_text(ball.get_rx(), ball.get_ry()-20, fill = "blue", text="x:"+str(int(ball.get_stat("original_x"))), font=("Purisa", 8, "bold"))
-            self.game_canvas.create_text(ball.get_rx(), ball.get_ry()-10, fill = "orange", text="y:"+str(int(ball.get_stat("original_y"))), font=("Purisa", 8, "bold"))
-            self.game_canvas.create_text(ball.get_rx(), ball.get_ry(), fill = "black", text="f:"+str(math.degrees(ball.get_facing())), font=("Purisa", 8, "bold"))
-            self.game_canvas.create_text(ball.get_rx(), ball.get_ry()+10, fill = "magenta", text="i:"+str(round(ball.get_sensor_input(), 2)), font=("Purisa", 8, "bold"))
-            self.game_canvas.create_text(ball.get_rx(), ball.get_ry()+20, fill = "brown", text="s:"+str(ball.get_speed()), font=("Purisa", 8, "bold"))
-
           self.game_canvas.create_oval(ball.get_rx() - ball.get_sensor_size(),
                                       ball.get_ry() - ball.get_sensor_size(),
                                       ball.get_rx() + ball.get_sensor_size(),
@@ -237,6 +237,14 @@ class Game:
                                       ball.get_rx() + ball.get_size(),
                                       ball.get_ry() + ball.get_size(),  
                                       start=-ball.get_facing_degrees()+90-ball.get_head_size()/2,  extent=ball.get_head_size(), fill="black")
+
+          #debugging
+          if self.debug == True:
+            self.game_canvas.create_text(ball.get_rx(), ball.get_ry()-20, fill = "blue", text="x:"+str(int(ball.get_x())), font=("Purisa", 8, "bold"))
+            self.game_canvas.create_text(ball.get_rx(), ball.get_ry()-10, fill = "orange", text="y:"+str(int(ball.get_y())), font=("Purisa", 8, "bold"))
+            self.game_canvas.create_text(ball.get_rx(), ball.get_ry(), fill = "cyan", text="f:"+str(round(math.degrees(ball.get_facing()))), font=("Purisa", 8, "bold"))
+            self.game_canvas.create_text(ball.get_rx(), ball.get_ry()+10, fill = "magenta", text="i:"+str(round(ball.get_sensor_input(), 2)), font=("Purisa", 8, "bold"))
+            self.game_canvas.create_text(ball.get_rx(), ball.get_ry()+20, fill = "brown", text="s:"+str(round(ball.get_speed(), 2)), font=("Purisa", 8, "bold"))
 
         time.sleep(self.animation_refresh_seconds)
       else:
@@ -295,7 +303,7 @@ class NewEntity:
                                 random.random(), random.random(), random.random(), random.random(),  #Hidden layer weights
                                 random.random(), random.random(), random.random(), random.random(),  #Hidden layer weights                              
                                 random.random(), random.random(), random.random(), random.random()]) #Output layer weights 
-      self.__stats = {"traveled": 0, "age": 0, "generation": game.current_generation, "original_x": 0, "original_y": 0, "max_distance_from_origin": 0}
+      self.__stats = {"traveled": 0, "age": 0, "generation": game.current_generation, "original_x": 0, "original_y": 0, "max_distance_from_origin": 0, "kills": 0}
 
       #constructor
       self.set_x(lx)
@@ -373,6 +381,11 @@ class NewEntity:
     def set_facing_degrees(self, facing_degrees):
       self.__facing_degrees = facing_degrees
       self.__facing = math.radians(facing_degrees)
+
+    def get_impact(self):
+      return self.__impact
+    def set_impact(self, impact):
+      self.__impact = impact
 
     def get_sensor_input(self):
       return self.__sensor_input
